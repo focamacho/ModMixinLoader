@@ -1,0 +1,16 @@
+[
+{
+  "modid": "modmixinloader",
+  "name": "ModMixinLoader",
+  "description": "A mod that makes it easier to mixin into other mods.",
+  "version": "1.0",
+  "mcversion": "1.12.2",
+  "url": "https://www.curseforge.com/minecraft/mc-mods/modmixinloader",
+  "updateUrl": "",
+  "authorList": ["focamacho"],
+  "credits": "",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]
