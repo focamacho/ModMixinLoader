@@ -4,12 +4,16 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.minecraft.launchwrapper.LaunchClassLoader;
+import net.minecraftforge.fml.common.FMLCommonHandler;
+import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.relauncher.CoreModManager;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.management.ManagementFactory;
+import java.lang.reflect.Field;
 import java.net.MalformedURLException;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -23,6 +27,21 @@ public class ModHandler {
     private static final HashMap<String, String[]> mixinsToLoad = new HashMap<>();
 
     static {
+        String command = System.getProperty("sun.java.command");
+        if(command != null) {
+            Optional<String> mods = Arrays.stream(command.split(" ")).filter(it -> it.startsWith("--mods=")).findFirst();
+
+            if (mods.isPresent()) {
+                String toCheck = mods.get().substring("--mods=".length());
+
+                for (String modFile : toCheck.split(",")) {
+                    if (modFile.endsWith(".jar")) {
+                        cacheModFile(new File(modFile));
+                    }
+                }
+            }
+        }
+
         File folder = new File("mods");
         scan(folder);
     }
