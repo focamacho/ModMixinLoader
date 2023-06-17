@@ -2,14 +2,12 @@ package com.focamacho.modmixinloader.util;
 
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.launchwrapper.LaunchClassLoader;
 import net.minecraftforge.fml.relauncher.CoreModManager;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.MalformedURLException;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -23,6 +21,7 @@ public class ModHandler {
     private static final HashMap<String, String[]> mixinsToLoad = new HashMap<>();
 
     static {
+        // Load mods from --mods arg
         String command = System.getProperty("sun.java.command");
         if(command != null) {
             Optional<String> mods = Arrays.stream(command.split(" ")).filter(it -> it.startsWith("--mods=")).findFirst();
@@ -35,6 +34,36 @@ public class ModHandler {
                         cacheModFile(new File(modFile));
                     }
                 }
+            }
+        }
+
+        // Load mods from mod_list.json
+        File modList = new File("mods/mod_list.json");
+        if(modList.exists()) {
+            try {
+                JsonObject json = new GsonBuilder().create().fromJson(new FileReader(modList), JsonObject.class);
+
+                if(json.has("repositoryRoot")) {
+                    File modFolder = new File(json.get("repositoryRoot").getAsString());
+                    JsonArray mods = json.getAsJsonArray("modRef");
+                    for (JsonElement mod : mods) {
+                        String[] split = mod.getAsString().split(":");
+                        if(split.length != 3) continue;
+                        File modLocation = new File(
+                                modFolder,
+                                split[0].replace(".", "/") + "/" + split[1] + "/" + split[2] + "/"
+                        );
+
+                        if(modLocation.exists()) {
+                            File[] files = modLocation.listFiles();
+                            if(files != null && files.length > 0) {
+                                cacheModFile(files[0]);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
 
