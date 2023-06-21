@@ -9,7 +9,10 @@ import net.minecraftforge.fml.relauncher.CoreModManager;
 
 import java.io.*;
 import java.net.MalformedURLException;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -23,18 +26,21 @@ public class ModHandler {
     static {
         // Load mods from --mods arg
         String command = System.getProperty("sun.java.command");
+        String gameFolder = null;
         if(command != null) {
-            Optional<String> mods = Arrays.stream(command.split(" ")).filter(it -> it.startsWith("--mods=")).findFirst();
+            try {
+                String mods = command.substring(command.indexOf("--mods=") + 7);
 
-            if (mods.isPresent()) {
-                String toCheck = mods.get().substring("--mods=".length());
-
-                for (String modFile : toCheck.split(",")) {
+                for (String modFile : mods.split(",")) {
                     if (modFile.endsWith(".jar")) {
                         cacheModFile(new File(modFile));
                     }
                 }
-            }
+            } catch (IndexOutOfBoundsException ignored) {}
+
+            try {
+                gameFolder = command.substring(command.indexOf("--gameDir") + 10).split(" ")[0];
+            } catch (IndexOutOfBoundsException ignored) {}
         }
 
         // Load mods from mod_list.json
@@ -67,8 +73,13 @@ public class ModHandler {
             }
         }
 
-        File folder = new File("mods");
-        scan(folder);
+        String modsFolder = System.getProperty("LibLoader.modsFolder");
+        if(modsFolder != null && !modsFolder.isEmpty()) scan(new File(modsFolder));
+        else {
+            if(gameFolder == null) gameFolder = System.getProperty("user.dir");
+            File folder = gameFolder != null && !gameFolder.isEmpty() ? new File(gameFolder, "mods") : new File("mods");
+            scan(folder);
+        }
     }
 
     private static void scan(File folder) {
