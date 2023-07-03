@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.launchwrapper.LaunchClassLoader;
 import net.minecraftforge.fml.relauncher.CoreModManager;
+import org.spongepowered.asm.mixin.MixinEnvironment;
 
 import java.io.*;
 import java.net.MalformedURLException;
@@ -24,61 +25,67 @@ public class ModHandler {
     private static final HashMap<String, String[]> mixinsToLoad = new HashMap<>();
 
     static {
-        // Load mods from --mods arg
-        String command = System.getProperty("sun.java.command");
-        String gameFolder = null;
-        if(command != null) {
-            try {
-                String mods = command.substring(command.indexOf("--mods=") + 7);
+        if(MixinEnvironment.getCurrentEnvironment().getSide() == MixinEnvironment.Side.SERVER) {
+            scan(new File("./mods"));
+        } else {
+            // Load mods from --mods arg
+            String command = System.getProperty("sun.java.command");
+            String gameFolder = null;
+            if (command != null) {
+                try {
+                    String mods = command.substring(command.indexOf("--mods=") + 7);
 
-                for (String modFile : mods.split(",")) {
-                    if (modFile.endsWith(".jar")) {
-                        cacheModFile(new File(modFile));
+                    for (String modFile : mods.split(",")) {
+                        if (modFile.endsWith(".jar")) {
+                            cacheModFile(new File(modFile));
+                        }
                     }
+                } catch (IndexOutOfBoundsException ignored) {
                 }
-            } catch (IndexOutOfBoundsException ignored) {}
 
-            try {
-                gameFolder = command.substring(command.indexOf("--gameDir") + 10).split(" ")[0];
-            } catch (IndexOutOfBoundsException ignored) {}
-        }
+                try {
+                    gameFolder = command.substring(command.indexOf("--gameDir") + 10).split(" ")[0];
+                } catch (IndexOutOfBoundsException ignored) {
+                }
+            }
 
-        // Load mods from mod_list.json
-        File modList = new File("mods/mod_list.json");
-        if(modList.exists()) {
-            try {
-                JsonObject json = new GsonBuilder().create().fromJson(new FileReader(modList), JsonObject.class);
+            // Load mods from mod_list.json
+            File modList = new File("mods/mod_list.json");
+            if (modList.exists()) {
+                try {
+                    JsonObject json = new GsonBuilder().create().fromJson(new FileReader(modList), JsonObject.class);
 
-                if(json.has("repositoryRoot")) {
-                    File modFolder = new File(json.get("repositoryRoot").getAsString());
-                    JsonArray mods = json.getAsJsonArray("modRef");
-                    for (JsonElement mod : mods) {
-                        String[] split = mod.getAsString().split(":");
-                        if(split.length != 3) continue;
-                        File modLocation = new File(
-                                modFolder,
-                                split[0].replace(".", "/") + "/" + split[1] + "/" + split[2] + "/"
-                        );
+                    if (json.has("repositoryRoot")) {
+                        File modFolder = new File(json.get("repositoryRoot").getAsString());
+                        JsonArray mods = json.getAsJsonArray("modRef");
+                        for (JsonElement mod : mods) {
+                            String[] split = mod.getAsString().split(":");
+                            if (split.length != 3) continue;
+                            File modLocation = new File(
+                                    modFolder,
+                                    split[0].replace(".", "/") + "/" + split[1] + "/" + split[2] + "/"
+                            );
 
-                        if(modLocation.exists()) {
-                            File[] files = modLocation.listFiles();
-                            if(files != null && files.length > 0) {
-                                cacheModFile(files[0]);
+                            if (modLocation.exists()) {
+                                File[] files = modLocation.listFiles();
+                                if (files != null && files.length > 0) {
+                                    cacheModFile(files[0]);
+                                }
                             }
                         }
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
             }
-        }
 
-        String modsFolder = System.getProperty("LibLoader.modsFolder");
-        if(modsFolder != null && !modsFolder.isEmpty()) scan(new File(modsFolder));
-        else {
-            if(gameFolder == null) gameFolder = System.getProperty("user.dir");
-            File folder = gameFolder != null && !gameFolder.isEmpty() ? new File(gameFolder, "mods") : new File("mods");
-            scan(folder);
+            String modsFolder = System.getProperty("LibLoader.modsFolder");
+            if (modsFolder != null && !modsFolder.isEmpty()) scan(new File(modsFolder));
+            else {
+                if (gameFolder == null) gameFolder = System.getProperty("user.dir");
+                File folder = gameFolder != null && !gameFolder.isEmpty() ? new File(gameFolder, "mods") : new File("mods");
+                scan(folder);
+            }
         }
     }
 
