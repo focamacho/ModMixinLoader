@@ -14,7 +14,7 @@ import java.util.Map;
 @IFMLLoadingPlugin.MCVersion("1.12.2")
 public class ModMixinLoader implements IFMLLoadingPlugin {
 
-    private final Logger logger = LogManager.getLogger("ModMixinLoader");
+    public static final Logger logger = LogManager.getLogger("ModMixinLoader");
 
     public ModMixinLoader() {
         MixinBootstrap.init();

@@ -1,9 +1,7 @@
 package com.focamacho.modmixinloader.util;
 
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.focamacho.modmixinloader.ModMixinLoader;
+import com.google.gson.*;
 import net.minecraft.launchwrapper.LaunchClassLoader;
 import net.minecraftforge.fml.relauncher.CoreModManager;
 import org.spongepowered.asm.mixin.MixinEnvironment;
@@ -33,15 +31,16 @@ public class ModHandler {
             String gameFolder = null;
             if (command != null) {
                 try {
-                    String mods = command.substring(command.indexOf("--mods=") + 7);
-
+                    int index = command.indexOf("--mods=");
+                    if (index == -1)
+                        throw new IndexOutOfBoundsException();
+                    String mods = command.substring(index + 7);
+                    ModMixinLoader.logger.info("Found --mods argument. Trying to load mods from it.");
                     for (String modFile : mods.split(",")) {
-                        if (modFile.endsWith(".jar")) {
+                        if (modFile.endsWith(".jar"))
                             cacheModFile(new File(modFile));
-                        }
                     }
-                } catch (IndexOutOfBoundsException ignored) {
-                }
+                } catch (IndexOutOfBoundsException ignored) {}
 
                 try {
                     gameFolder = command.substring(command.indexOf("--gameDir") + 10).split(" ")[0];
@@ -80,16 +79,20 @@ public class ModHandler {
             }
 
             String modsFolder = System.getProperty("LibLoader.modsFolder");
-            if (modsFolder != null && !modsFolder.isEmpty()) scan(new File(modsFolder));
-            else {
-                if (gameFolder == null) gameFolder = System.getProperty("user.dir");
-                File folder = gameFolder != null && !gameFolder.isEmpty() ? new File(gameFolder, "mods") : new File("mods");
-                scan(folder);
-            }
+            if (modsFolder != null && !modsFolder.isEmpty())
+                scan(new File(modsFolder));
+
+            if (gameFolder != null && !gameFolder.isEmpty())
+                scan(new File(gameFolder, "mods"));
+
+            gameFolder = System.getProperty("user.dir");
+            File folder = (gameFolder != null && !gameFolder.isEmpty()) ? new File(gameFolder, "mods") : new File("mods");
+            scan(folder);
         }
     }
 
     private static void scan(File folder) {
+        ModMixinLoader.logger.info("Found mods folder. Trying to load mods from it: {}", folder.getAbsolutePath());
         if(folder.exists() && folder.isDirectory() && folder.listFiles() != null) {
             File[] mods = folder.listFiles(f -> f.getName().endsWith(".jar") || f.isDirectory());
             if(mods != null) {
@@ -105,28 +108,61 @@ public class ModHandler {
     }
 
     private static void cacheModFile(File file) {
+        ModMixinLoader.logger.info("Caching mod file: {}", file.getName());
         try(ZipFile zip = new ZipFile(file)) {
             List<? extends ZipEntry> entries = zip.stream().filter(entry -> entry != null && !entry.isDirectory() &&
                     (entry.getName().equals("mcmod.info") || entry.getName().startsWith("modmixins/"))).collect(Collectors.toList());
 
             for (ZipEntry entry : entries) {
+                // Detects a mod
                 if(entry.getName().equals("mcmod.info")) {
                     try(InputStream is = zip.getInputStream(entry)) {
                         try(InputStreamReader isr = new InputStreamReader(is)) {
                             try(BufferedReader reader = new BufferedReader(isr)) {
-                                JsonArray array = new GsonBuilder().create()
-                                        .fromJson(reader, JsonArray.class);
+                                // Read file
+                                String line;
+                                StringBuilder sb = new StringBuilder();
+                                while((line = reader.readLine()) != null) {
+                                    sb.append(line).append("\n");
+                                }
+                                String json = sb.toString();
 
-                                if(array.size() > 0) {
-                                    String modid = array.get(0).getAsJsonObject().get("modid").getAsString();
-                                    if(modid != null) {
-                                        cachedMods.put(modid, file);
+                                Gson gson = new GsonBuilder().create();
+                                JsonArray array;
+                                try {
+                                    array = gson.fromJson(json, JsonArray.class);
+                                } catch (JsonSyntaxException e) {
+                                    array = null;
+                                }
+
+                                if(array != null) {
+                                    for (JsonElement jsonElement : array) {
+                                        String modid = jsonElement.getAsJsonObject().get("modid").getAsString();
+                                        if (modid != null && !cachedMods.containsKey(modid)) {
+                                            cachedMods.put(modid, file);
+                                        }
+                                    }
+                                } else {
+                                    JsonObject jsonObj = gson.fromJson(json, JsonObject.class);
+                                    if(jsonObj != null && jsonObj.has("modList")) {
+                                        JsonArray modList = jsonObj.getAsJsonArray("modList");
+                                        for (JsonElement jsonElement : modList) {
+                                            String modid = jsonElement.getAsJsonObject().get("modid").getAsString();
+                                            if (modid != null && !cachedMods.containsKey(modid)) {
+                                                cachedMods.put(modid, file);
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                } else if(entry.getName().startsWith("modmixins/")) {
+
+                    continue;
+                }
+
+                // Detects the mixins to load
+                if(entry.getName().startsWith("modmixins/")) {
                     try(InputStream is = zip.getInputStream(entry)) {
                         try(InputStreamReader isr = new InputStreamReader(is)) {
                             try(BufferedReader reader = new BufferedReader(isr)) {
@@ -134,12 +170,10 @@ public class ModHandler {
                                         .fromJson(reader, JsonObject.class);
 
                                 JsonArray requiredMods = object.get("mods").getAsJsonArray();
-                                if(requiredMods.size() > 0) {
+                                if (requiredMods.size() > 0) {
                                     String[] mods = new String[requiredMods.size()];
-                                    for(int i = 0; i < requiredMods.size(); i++) {
+                                    for (int i = 0; i < requiredMods.size(); i++)
                                         mods[i] = requiredMods.get(i).getAsString();
-                                    }
-
                                     mixinsToLoad.put(entry.getName(), mods);
                                 }
                             }
